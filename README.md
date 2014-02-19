@@ -1,4 +1,4 @@
-webRTC
+﻿webRTC
 ======
 
 Projet PAPPL ECN KOSMOPOLEAD
@@ -15,6 +15,6 @@ Le projet est actuellement au stade de prototype texte. Pour faire fonctionner l
 Fonctionnement node.js
 - Installer node.js
 - Dans l'invite de commandes se placer dans le dossier du projet
-- Exécuter les installations : node npm node-static ET node npm socket.io
+- Exécuter les installations : npm node-static ET npm socket.io
 - Lancer le serveur : node server.js
 - Arrêter le serveur : ctrl+C
