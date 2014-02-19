@@ -1,4 +1,5 @@
-/********************************************************************** WebRTC text communication prototype
+/********************************************************************** 
+WebRTC text communication prototype
 Javascript browser app
 
 Authors : Gabriel Guilbart & Raphaël Traineau
@@ -13,9 +14,9 @@ Please note that the app is builded for only TWO users
 
 /*** Sending listeners ***/
 document.getElementById("send").onclick = sendData;//button Send listener
-document.getElementById("toSend").onkeypress = function(){
+document.getElementById("toSend").onkeypress = function(event){
 //enter pressed on toSend textarea listener
-	if(window.event.keyCode == '13') {//'enter' code
+	if(event.keyCode == '13') {//'enter' code
 		sendData();//JS : () needed !
 	};
 }
@@ -29,10 +30,10 @@ var iceSent = 0;//to check whether the ice candidate was sent or not. //TODO : p
 
 //ice servers addresses to open users NATs
 var pc_config = webrtcDetectedBrowser === 'firefox' ?
-  {'iceServers':[{'url':'stun:23.21.150.121'}]} : // number IP
+  {'iceServers':[{'url':'stun:23.21.150.121'}]} :
   {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
   
-var pc_constraints = null;
+var pc_constraints = null;//constraints about media
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
@@ -78,13 +79,14 @@ socket.on('start',function(){
 		textChannel.onmessage = handleMessage;//message receiving listener
 		
 		//creates an offer and a session description and send them
-		//JS - TODO : not really understandable o_0
+		//JS : finally, what are createOffer parameters ?
 		peerConnection.createOffer(function (sessionDescription) {
 			peerConnection.setLocalDescription(sessionDescription);
 			trace('Offer from localPeerConnection \n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
 			socket.emit('offerSessionDescription',sessionDescription);
-		},null, null);
+		},null, null);//2nd null is media constraints, 1st remains a mystery
 	peerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		//note the ON-icecandidate : several ice candidates are returned
 	}
 });
 
@@ -109,19 +111,15 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 /***
 	sendIceCandidate function
 	Send browser ice candidate (if not ever did)
+	Called by onicecandidate every time a candidate is returned by the system (as an event)
 ***/
-//JS same kind of event than http://en.wikipedia.org/wiki/Event-driven_architecture#Event_channel ?
 function sendIceCandidate(event){
-	if(iceSent == 0){//TODO find why it tries to send so much times ice candidate
-		if(event.candidate){
-			console.log('sending ice candidate success');
-			socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//strange but works that way
-			iceSent = 1;
-		}
-		else{
-			alert('sending ice candidate failed');
-			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-		}
+	if(event.candidate){
+		console.log('sending ice candidate success');
+		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//strange but works that way
+	}
+	else{
+		console.log('onicecandidate returned an event but it\'s not a candidate...');
 	}
 }
 
@@ -147,11 +145,12 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		peerConnection.createAnswer(function (sessionDescription) {
 			peerConnection.setLocalDescription(sessionDescription);
 			socket.emit('answerToOffer',sessionDescription);
-		});
+		},null,null);//2nd null is media constraints, 1st remains a mystery
 		
 		console.log('offer sent');
-		peerConnection.ondatachannel = gotReceiveChannel;
-		peerConnection.onicecandidate = sendIceCandidate;
+		peerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
+		peerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		//note the ON-icecandidate : several ice candidates are returned
 	}
 });
 
@@ -169,14 +168,15 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 
 /***
 	gotReceiveChannel function
-	Only called by non-initiator. Sets dataChannel from the one received from the server.
+	Only called by non-initiator. Sets local dataChannel from the one received from the server.
 	See offerSessionDescription socket's listener for initiator equivalent.
+	Called by onDataChannel, when a dataChannel is received (in the event)
 ***/
 //JS same kind of event than http://en.wikipedia.org/wiki/Event-driven_architecture#Event_channel ?
 function gotReceiveChannel(event) {
 	console.log('receive channel');
 	textChannel = event.channel;
-	textChannel.onmessage = handleMessage;
+	textChannel.onmessage = handleMessage;//when the app gets a message, call handleMessage, which displays it
 }
 
 /***
@@ -200,6 +200,7 @@ function sendData(){
 	try{
 		textChannel.send(toSend.value);
 		document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
+		
 		//once message sent, textarea is cleared and focused once new (in button clicked case)
 		toSend.value = '';
 		toSend.focus();
