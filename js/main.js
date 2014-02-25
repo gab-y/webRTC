@@ -22,10 +22,13 @@ document.getElementById("toSend").onkeypress = function(event){
 }
 
 //connection globals				
-var textChannel; 
-var peerConnection;
+var ownerTextChannel; 
+var ownerPeerConnection;
 
-var isFirst = 2;//initialized at 2, at 1 you are communication initiator, at 0 follower. The js code is the same whether you are initiator or not but the instructions are not.
+var clientTextChannel;
+var clientPeerConnection;
+
+var isFirst = 0;//initialized at 2, at 1 you are communication initiator, at 0 follower. The js code is the same whether you are initiator or not but the instructions are not.
 var iceSent = 0;//to check whether the ice candidate was sent or not. //TODO : prevent multiple tries !
 
 //ice servers addresses to open users NATs
@@ -37,6 +40,11 @@ var pc_constraints = null;//constraints about media
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
+socket.on('new connection',function(){
+	isFirst ++;
+	console.log('status : '+isFirst);
+});
+
 //JS : socket.on = socket messages listeners
 /***
 	'Server connection' server's message listener
@@ -44,14 +52,27 @@ var socket = io.connect();//connect to server's websocket. Answers if you are fi
 	Sent when a navigator connects to the server
 ***/
 socket.on('Server connection',function(info) {
-	if(info == 'Initiator'){
-		isFirst = 1;
-		console.log('first');
+	//if(isFirst == 2){
+	/*	if(info == 'Initiator'){
+			isFirst = 1;
+			console.log('first');
+			}
+		else{
+			isFirst = 0;
+			console.log('not first');
 		}
+	/*}
 	else{
-		isFirst = 0;
-		console.log('not first');
-	}
+		if(isFirst == 1){
+			isFirst = 3;
+		}
+		else{
+			if(isFirst == 0){
+
+				isFirst = 1;
+			}
+		}
+	}*/
 });
 
 /***
@@ -63,7 +84,7 @@ socket.on('start',function(){
 	if(isFirst == 1){
 		//create peer connection (global)
 		try {
-			peerConnection = new RTCPeerConnection(pc_config, pc_constraints);
+			ownerPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
 		} catch (e) {
 			//JS : alert display a window
 			alert('RTCPeerConnection failed');
@@ -71,21 +92,22 @@ socket.on('start',function(){
 		}
 		//create data channel (global too)
 		try {
-			textChannel = peerConnection.createDataChannel({reliable: false});//TODO reliable is used only by Chrome ?
+			ownerTextChannel = ownerPeerConnection.createDataChannel({reliable: false});//reliable : guarantee messages arrive, and their order. Potentially slower. 
+				// TODO : Chrome doesn't handle reliable mode ?
 		} catch (e) {
 			alert('Send channel creation failed');
 			console.log(e.message);
 		}
-		textChannel.onmessage = handleMessage;//message receiving listener
+		ownerTextChannel.onmessage = ownerMessage;//message receiving listener
 		
 		//creates an offer and a session description and send them
 		//JS : finally, what are createOffer parameters ?
-		peerConnection.createOffer(function (sessionDescription) {
-			peerConnection.setLocalDescription(sessionDescription);
+		ownerPeerConnection.createOffer(function (sessionDescription) {
+			ownerPeerConnection.setLocalDescription(sessionDescription);
 			trace('Offer from localPeerConnection \n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
 			socket.emit('offerSessionDescription',sessionDescription);
 		},null, null);//2nd null is media constraints, 1st remains a mystery
-	peerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 	}
 });
@@ -96,14 +118,33 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand){
-	try{
-	peerConnection.addIceCandidate(new RTCIceCandidate({
-		sdpMLineIndex: rsdp, 
-		candidate: rcand
-		}));
-	}catch(e){
-		alert('adding ice candidate failed');
-		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+	if(isFirst == 1){
+		try{
+		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
+			sdpMLineIndex: rsdp, 
+			candidate: rcand
+			}));
+		//isFirst = 2;
+		}catch(e){
+			alert('adding ice candidate failed');
+			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+		}
+	}
+	else{ 
+		if(isFirst == 0){
+			try{
+			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
+				sdpMLineIndex: rsdp, 
+				candidate: rcand
+				}));
+			//isFirst = 1;
+			}catch(e){
+				alert('adding ice candidate failed');
+				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		}else{
+			console.log('received ice, but nothing to do');
+		}
 	}
 });
 
@@ -132,24 +173,24 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 	if(isFirst == 0){
 		console.log('received offer');
 		try {
-			peerConnection = new RTCPeerConnection(pc_config, pc_constraints);
+			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
 		} catch (e) {
 			alert('RTCPeerConnection failed');
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
 		//set remote description from the one received
-		peerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
+		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
 		
 		//create session description from our browser
 		//JS : finally... what's createAnswer parameter ?
-		peerConnection.createAnswer(function (sessionDescription) {
-			peerConnection.setLocalDescription(sessionDescription);
+		clientPeerConnection.createAnswer(function (sessionDescription) {
+			clientPeerConnection.setLocalDescription(sessionDescription);
 			socket.emit('answerToOffer',sessionDescription);
 		},null,null);//2nd null is media constraints, 1st remains a mystery
 		
 		console.log('offer sent');
-		peerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
-		peerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
+		clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 	}
 });
@@ -162,8 +203,12 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 socket.on('answerSessionDescription', function(answererSessionDescription){
 	if(isFirst == 1){
 		console.log('received answer');
-		peerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
+		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
+		//isFirst = -1; // NOT HERE !!
 	}
+	else{
+		isFirst == 0;
+	}	
 });
 
 /***
@@ -172,11 +217,10 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 	See offerSessionDescription socket's listener for initiator equivalent.
 	Called by onDataChannel, when a dataChannel is received (in the event)
 ***/
-//JS same kind of event than http://en.wikipedia.org/wiki/Event-driven_architecture#Event_channel ?
 function gotReceiveChannel(event) {
 	console.log('receive channel');
-	textChannel = event.channel;
-	textChannel.onmessage = handleMessage;//when the app gets a message, call handleMessage, which displays it
+	clientTextChannel = event.channel;
+	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call handleMessage, which displays it
 }
 
 /***
@@ -184,9 +228,33 @@ function gotReceiveChannel(event) {
 	dataChannel.onmessage listener. Display received messages.
 	Set on offerSessionDescription socket listener for initiator and gotReceiveChannel for non-initiator
 ***/
-function handleMessage(event){
+function ownerMessage(event){
 	console.log('got message');
 	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+event.data+"</p>";
+	if(typeof(clientTextChannel) != 'undefined'){
+			try{
+				clientTextChannel.send(event.data);
+			}catch(e){
+				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		} 
+}
+
+/***
+	handleMessage function
+	dataChannel.onmessage listener. Display received messages.
+	Set on offerSessionDescription socket listener for initiator and gotReceiveChannel for non-initiator
+***/
+function clientMessage(event){
+	console.log('got message');
+	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+event.data+"</p>";
+	if(typeof(ownerTextChannel) != 'undefined'){
+			try{
+				ownerTextChannel.send(event.data);
+			}catch(e){
+				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		} 
 }
 
 /***
@@ -196,11 +264,24 @@ function handleMessage(event){
 ***/
 function sendData(){
 	var toSend = document.getElementById("toSend");
-	console.log(toSend.value);
 	try{
-		textChannel.send(toSend.value);
-		document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
-		
+	document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
+		if(typeof(clientTextChannel) != 'undefined'){
+			console.log("client : " + toSend.value);
+			try{
+				clientTextChannel.send(toSend.value);
+			}catch(e){
+				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		}
+		if(typeof(ownerTextChannel) != 'undefined'){
+			console.log("owner : " + toSend.value);
+			try{
+				ownerTextChannel.send(toSend.value);
+			}catch(e){
+				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		}
 		//once message sent, textarea is cleared and focused once new (in button clicked case)
 		toSend.value = '';
 		toSend.focus();

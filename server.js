@@ -27,6 +27,8 @@ var flag = 1; // flag downed once one browser is connected
 /*** socket creation ***/
 //on('connection') means one browser connect to socket
 io.sockets.on('connection', function(socket){
+	socket.broadcast.emit('new connection');
+
 	//first connection
 	if(flag==1){
 		socket.emit('Server connection','Initiator');
