@@ -20,6 +20,7 @@ document.getElementById("toSend").onkeypress = function(event){
 		sendData();//JS : () needed !
 	};
 }
+document.getElementById("name").value = Math.floor(Math.random()*10001);
 
 /*** connection globals ***/
 //textChannels : webRTC dataChannel objects, to send any kind of data, text, files...
@@ -33,7 +34,13 @@ var ownerPeerConnection;
 var clientTextChannel;
 var clientPeerConnection;
 
-var connectionRole = 0;//initialized at 0, at 0 you are communication follower, at 1 initiator, after your connections are full. 
+/*** connection roles ***/
+			//  Client used - Owner used
+var NONE = 0;//      No           No
+var CLIENT = 1;//    Yes          No        First connection is considered with client connection used
+var BOTH = 2;//      Yes          Yes
+var OWNER = 3;//     No           Yes       Only in disconnection case
+var connectionRole = NONE;//initialized with no connections
 //The js file is the same whether you are initiator or not but the instructions are not.
 
 //ice servers addresses to open users NATs
@@ -53,7 +60,7 @@ var socket = io.connect();//connect to server's websocket. Answers if you are fi
 	Increments role, from 0 follower, 1 initiator, more : full
 ***/
 socket.on('new connection',function(){
-	connectionRole ++;
+	connectionRole = connectionRole == NONE ? CLIENT : BOTH; 
 	console.log('status : '+connectionRole);
 });
 
@@ -63,7 +70,8 @@ socket.on('new connection',function(){
 	Sent when a navigator connected, and there are at least two navigators connected to the server
 ***/
 socket.on('start',function(){
-	if(connectionRole == 1){
+	console.log('receive start');
+	if(connectionRole == CLIENT){
 		//create peer connection (global)
 		try {
 			ownerPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
@@ -81,6 +89,9 @@ socket.on('start',function(){
 			console.log(e.message);
 		}
 		ownerTextChannel.onmessage = ownerMessage;//message receiving listener
+		ownerTextChannel.onopen = function () {
+			//TODO : on connection behaviour : enabling typing, 'person connected', etc
+		};
 		
 		//creates an offer and a session description and send them
 		//JS : finally, what are createOffer parameters ?
@@ -100,7 +111,7 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand){
-	if(connectionRole == 1){//if launching a connexion, add candidate to own connection
+	if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
 		try{
 		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
 			sdpMLineIndex: rsdp, 
@@ -112,7 +123,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 		}
 	}
 	else{ 
-		if(connectionRole == 0){//if following a connexion, add candidate to remote connection
+		if(connectionRole == NONE || connectionRole == OWNER){//if following a connexion, add candidate to remote connection
 			try{
 			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
 				sdpMLineIndex: rsdp, 
@@ -150,7 +161,7 @@ function sendIceCandidate(event){
 	Sent when server gets initiator's RTC offer
 ***/
 socket.on('offerSessionDescription', function(offererSessionDescription){
-	if(connectionRole == 0){
+	if(connectionRole == NONE || connectionRole == OWNER){
 		console.log('received offer');
 		try {
 			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
@@ -172,6 +183,15 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
 		clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
+		clientPeerConnection.oniceconnectionstatechange = function(){
+			if(clientPeerConnection.iceConnectionState == 'disconnected'){
+				console.log('client disconnected');
+				connectionRole = connectionRole == BOTH ? OWNER : NONE;
+				clientPeerConnection.close();
+				clientTextChannel.close();
+				socket.emit('reorder');
+			}
+		}
 	}
 });
 
@@ -181,10 +201,19 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 	Sent when server gets answerer's RTC answer to initiator's offer
 ***/
 socket.on('answerSessionDescription', function(answererSessionDescription){
-	if(connectionRole == 1){
+	if(connectionRole == CLIENT){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
-	}
+		ownerPeerConnection.oniceconnectionstatechange = function(){
+			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
+				console.log('owner disconnected');
+				connectionRole = CLIENT;
+				ownerPeerConnection.close();
+				ownerTextChannel.close();
+				socket.emit('reorder');
+			}
+		}		
+	}	
 });
 
 /***
@@ -197,8 +226,10 @@ function gotReceiveChannel(event) {
 	console.log('receive channel');
 	clientTextChannel = event.channel;
 	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
+	clientTextChannel.onopen = function () {
+		//TODO : on connection behaviour : enabling typing, 'person connected', etc
+	};
 }
-
 /***
 	handling messages functions
 	dataChannel.onmessage listeners. Display received messages and transmit it to the other channel.
@@ -214,7 +245,7 @@ function clientMessage(event){
 	
 function handleMessage(channel,data){
 	console.log('got message');
-	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+data+"</p>";
+	document.getElementById("messages").innerHTML += "<p>"+data+"</p>";
 	if(typeof(channel) != 'undefined'){
 		try {
 			channel.send(data);
@@ -232,22 +263,12 @@ function handleMessage(channel,data){
 function sendData(){
 	var toSend = document.getElementById("toSend");
 	try{
-		document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
+		document.getElementById("messages").innerHTML += "<p><b>"+document.getElementById("name").value+"</b> : "+ toSend.value +"</p>";
 		if(typeof(clientTextChannel) != 'undefined'){
-			console.log("client : " + toSend.value);
-			try{
-				clientTextChannel.send(toSend.value);
-			}catch(e){
-				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-			}
+			clientTextChannel.send("<b>"+document.getElementById("name").value+"</b> : "+toSend.value);
 		}
 		if(typeof(ownerTextChannel) != 'undefined'){
-			console.log("owner : " + toSend.value);
-			try{
-				ownerTextChannel.send(toSend.value);
-			}catch(e){
-				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-			}
+			ownerTextChannel.send("<b>"+document.getElementById("name").value+"</b> : "+toSend.value);
 		}
 		//once message sent, textarea is cleared and focused once new (in button clicked case)
 		toSend.value = '';
@@ -259,4 +280,27 @@ function sendData(){
 }
 
 
-	
+document.getElementById("name").onblur = function(){
+	try{
+	document.getElementById("messages").innerHTML += "<p><i>"+document.getElementById("name").value +" joined</i></p>";
+		if(typeof(clientTextChannel) != 'undefined'){
+			clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
+		}
+		if(typeof(ownerTextChannel) != 'undefined'){
+			ownerTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
+		}
+	}
+	catch(e){
+		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+	}
+}
+
+window.onbeforeunload = function(){
+	if(typeof(clientTextChannel) != 'undefined'){
+		clientTextChannel.send("<b>"+document.getElementById("name")+"</b> left");
+	}
+	if(typeof(ownerTextChannel) != 'undefined'){
+		ownerTextChannel.send("<b>"+document.getElementById("name")+"</b> left");
+	}
+}
+

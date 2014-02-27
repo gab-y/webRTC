@@ -21,24 +21,11 @@ var app = http.createServer(function (req, res) {
 }).listen(2013);
 var io = require('socket.io').listen(app);
 
-/*** globals ***/
-var flag = 1; // flag downed once two browsers are connected
-
 /*** socket creation ***/
 //on('connection') means one browser connect to socket
 io.sockets.on('connection', function(socket){
 	socket.broadcast.emit('new connection');
-
-	//first connection
-	if(flag==1){
-		flag = 0;
-	}
-	//second connection
-	else{
-		if(flag == 0){
-			socket.broadcast.emit('start');
-		}
-	}
+	socket.broadcast.emit('start');
 	
 /*** socket functions ***/
 	//on(sendIceCandidate) : broadcasts received ice candidate
@@ -54,5 +41,9 @@ io.sockets.on('connection', function(socket){
 	//on(answerToOffer) : broadcasts received answer to previous offer
 	socket.on('answerToOffer', function(sessionDescription){
 		socket.broadcast.emit('answerSessionDescription',sessionDescription);
+	});
+	
+	socket.on('reorder',function(){
+		socket.broadcast.emit('start');
 	});
 });
