@@ -22,7 +22,7 @@ var app = http.createServer(function (req, res) {
 var io = require('socket.io').listen(app);
 
 /*** globals ***/
-var flag = 1; // flag downed once one browser is connected
+var flag = 1; // flag downed once two browsers are connected
 
 /*** socket creation ***/
 //on('connection') means one browser connect to socket
@@ -31,13 +31,10 @@ io.sockets.on('connection', function(socket){
 
 	//first connection
 	if(flag==1){
-		socket.emit('Server connection','Initiator');
 		flag = 0;
 	}
 	//second connection
 	else{
-		socket.emit('Server connection','Not initiator');
-		
 		if(flag == 0){
 			socket.broadcast.emit('start');
 		}

@@ -21,15 +21,20 @@ document.getElementById("toSend").onkeypress = function(event){
 	};
 }
 
-//connection globals				
+/*** connection globals ***/
+//textChannels : webRTC dataChannel objects, to send any kind of data, text, files...
+//peerConnections : webRTC peerConnection objects
+
+//connection objects linked to connection that user launched, because he connected first or someone connected after it  				
 var ownerTextChannel; 
 var ownerPeerConnection;
 
+//connection objects linked to connection that user connected to, with second to last user
 var clientTextChannel;
 var clientPeerConnection;
 
-var isFirst = 0;//initialized at 2, at 1 you are communication initiator, at 0 follower. The js code is the same whether you are initiator or not but the instructions are not.
-var iceSent = 0;//to check whether the ice candidate was sent or not. //TODO : prevent multiple tries !
+var connectionRole = 0;//initialized at 0, at 0 you are communication follower, at 1 initiator, after your connections are full. 
+//The js file is the same whether you are initiator or not but the instructions are not.
 
 //ice servers addresses to open users NATs
 var pc_config = webrtcDetectedBrowser === 'firefox' ?
@@ -40,48 +45,25 @@ var pc_constraints = null;//constraints about media
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
-socket.on('new connection',function(){
-	isFirst ++;
-	console.log('status : '+isFirst);
-});
-
 //JS : socket.on = socket messages listeners
-/***
-	'Server connection' server's message listener
-	Check whether the navigator is initiator from server's message
-	Sent when a navigator connects to the server
-***/
-socket.on('Server connection',function(info) {
-	//if(isFirst == 2){
-	/*	if(info == 'Initiator'){
-			isFirst = 1;
-			console.log('first');
-			}
-		else{
-			isFirst = 0;
-			console.log('not first');
-		}
-	/*}
-	else{
-		if(isFirst == 1){
-			isFirst = 3;
-		}
-		else{
-			if(isFirst == 0){
 
-				isFirst = 1;
-			}
-		}
-	}*/
+/***
+	'new connection' server's message listener
+	Send when a navigator connects to the server
+	Increments role, from 0 follower, 1 initiator, more : full
+***/
+socket.on('new connection',function(){
+	connectionRole ++;
+	console.log('status : '+connectionRole);
 });
 
 /***
 	'Start' server's message listener
-	If initiator, launches connections and send its ice candidate. If not, do nothing
-	Sent when two navigators are connected to the server
+	If in initiator role, launches connections (owner) and send its ice candidate. If not, do nothing
+	Sent when a navigator connected, and there are at least two navigators connected to the server
 ***/
 socket.on('start',function(){
-	if(isFirst == 1){
+	if(connectionRole == 1){
 		//create peer connection (global)
 		try {
 			ownerPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
@@ -118,31 +100,29 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand){
-	if(isFirst == 1){
+	if(connectionRole == 1){//if launching a connexion, add candidate to own connection
 		try{
 		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
 			sdpMLineIndex: rsdp, 
 			candidate: rcand
 			}));
-		//isFirst = 2;
 		}catch(e){
 			alert('adding ice candidate failed');
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
 	}
 	else{ 
-		if(isFirst == 0){
+		if(connectionRole == 0){//if following a connexion, add candidate to remote connection
 			try{
 			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
 				sdpMLineIndex: rsdp, 
 				candidate: rcand
 				}));
-			//isFirst = 1;
 			}catch(e){
 				alert('adding ice candidate failed');
 				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 			}
-		}else{
+		}else{//if own and remote connections are both defined
 			console.log('received ice, but nothing to do');
 		}
 	}
@@ -157,7 +137,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 function sendIceCandidate(event){
 	if(event.candidate){
 		console.log('sending ice candidate success');
-		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//strange but works that way
+		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//candidate object has to be divided, it's strange
 	}
 	else{
 		console.log('onicecandidate returned an event but it\'s not a candidate...');
@@ -166,11 +146,11 @@ function sendIceCandidate(event){
 
 /***
 	'offerSessionDescription' server's message listener
-	Not initiator : create its own connections' objects, create answer and ice candidate and send 
+	Not initiator : create its own connections' objects for remote connection, create answer and ice candidate and send 
 	Sent when server gets initiator's RTC offer
 ***/
 socket.on('offerSessionDescription', function(offererSessionDescription){
-	if(isFirst == 0){
+	if(connectionRole == 0){
 		console.log('received offer');
 		try {
 			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
@@ -188,7 +168,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 			socket.emit('answerToOffer',sessionDescription);
 		},null,null);//2nd null is media constraints, 1st remains a mystery
 		
-		console.log('offer sent');
+		console.log('answer sent');
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
 		clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
@@ -197,18 +177,14 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 
 /***
 	'answerSessionDescription' server's message listener
-	Initiator : set remote description from answer. Not initiator : nothing.
+	Initiator : set remote description on own connection from answer. Not initiator : nothing.
 	Sent when server gets answerer's RTC answer to initiator's offer
 ***/
 socket.on('answerSessionDescription', function(answererSessionDescription){
-	if(isFirst == 1){
+	if(connectionRole == 1){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
-		//isFirst = -1; // NOT HERE !!
 	}
-	else{
-		isFirst == 0;
-	}	
 });
 
 /***
@@ -220,52 +196,43 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 function gotReceiveChannel(event) {
 	console.log('receive channel');
 	clientTextChannel = event.channel;
-	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call handleMessage, which displays it
+	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
 }
 
 /***
-	handleMessage function
-	dataChannel.onmessage listener. Display received messages.
+	handling messages functions
+	dataChannel.onmessage listeners. Display received messages and transmit it to the other channel.
 	Set on offerSessionDescription socket listener for initiator and gotReceiveChannel for non-initiator
 ***/
 function ownerMessage(event){
-	console.log('got message');
-	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+event.data+"</p>";
-	if(typeof(clientTextChannel) != 'undefined'){
-			try{
-				clientTextChannel.send(event.data);
-			}catch(e){
-				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-			}
-		} 
+	handleMessage(clientTextChannel,event.data);
 }
 
-/***
-	handleMessage function
-	dataChannel.onmessage listener. Display received messages.
-	Set on offerSessionDescription socket listener for initiator and gotReceiveChannel for non-initiator
-***/
 function clientMessage(event){
+	handleMessage(ownerTextChannel,event.data);
+}
+	
+function handleMessage(channel,data){
 	console.log('got message');
-	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+event.data+"</p>";
-	if(typeof(ownerTextChannel) != 'undefined'){
-			try{
-				ownerTextChannel.send(event.data);
-			}catch(e){
-				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-			}
-		} 
+	document.getElementById("messages").innerHTML += "<p><b>Lui : </b>"+data+"</p>";
+	if(typeof(channel) != 'undefined'){
+		try {
+			channel.send(data);
+		}catch(e){
+			trace(e.message);
+		}
+	}
 }
 
 /***
 	sendData function
-	Send textarea's content through dataChannel.
+	Send textarea's content through both dataChannels (if exist).
 	Called when user click on Send or press Enter. 
 ***/
 function sendData(){
 	var toSend = document.getElementById("toSend");
 	try{
-	document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
+		document.getElementById("messages").innerHTML += "<p><b>Moi :</b> "+ toSend.value +"</p>";
 		if(typeof(clientTextChannel) != 'undefined'){
 			console.log("client : " + toSend.value);
 			try{
