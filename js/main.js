@@ -91,6 +91,7 @@ socket.on('start',function(){
 		ownerTextChannel.onmessage = ownerMessage;//message receiving listener
 		ownerTextChannel.onopen = function () {
 			//TODO : on connection behaviour : enabling typing, 'person connected', etc
+			joined();
 		};
 		
 		//creates an offer and a session description and send them
@@ -122,6 +123,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 		try{
 		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
 			sdpMLineIndex: rsdp, 
+			sdpMid: rmid,
 			candidate: rcand
 			}));
 		}catch(e){
@@ -133,7 +135,8 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 		if(connectionRole == NONE || connectionRole == OWNER){//if following a connexion, add candidate to remote connection
 			try{
 			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
-				sdpMLineIndex: rsdp, 
+				sdpMLineIndex: rsdp,
+				sdpMid: rmid,
 				candidate: rcand
 				}));
 			}catch(e){
