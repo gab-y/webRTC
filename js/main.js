@@ -292,6 +292,9 @@ function sendData(){
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 	}
+	//once message sent, textarea is cleared and focused once new (in button clicked case)
+	toSend.value = '';
+	toSend.focus();
 }
 
 function joined(){
