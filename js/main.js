@@ -95,11 +95,18 @@ socket.on('start',function(){
 		
 		//creates an offer and a session description and send them
 		//JS : finally, what are createOffer parameters ?
-		ownerPeerConnection.createOffer(function (sessionDescription) {
-			ownerPeerConnection.setLocalDescription(sessionDescription);
-			trace('Offer from localPeerConnection \n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
-			socket.emit('offerSessionDescription',sessionDescription);
-		},null, null);//2nd null is media constraints, 1st remains a mystery
+		ownerPeerConnection.createOffer(
+			//success callback - mandatory
+			function (sessionDescription) {
+				ownerPeerConnection.setLocalDescription(sessionDescription);
+				trace('Offer from localPeerConnection \n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
+				socket.emit('offerSessionDescription',sessionDescription);
+			},
+			//failure callback
+			function (){
+				alert("cannot create offer");
+			},
+			null);//options - optionnal
 		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 	}
@@ -174,10 +181,17 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		
 		//create session description from our browser
 		//JS : finally... what's createAnswer parameter ?
-		clientPeerConnection.createAnswer(function (sessionDescription) {
-			clientPeerConnection.setLocalDescription(sessionDescription);
-			socket.emit('answerToOffer',sessionDescription);
-		},null,null);//2nd null is media constraints, 1st remains a mystery
+		clientPeerConnection.createAnswer(
+			//success callback
+			function (sessionDescription) {
+				clientPeerConnection.setLocalDescription(sessionDescription);
+				socket.emit('answerToOffer',sessionDescription);
+			},
+			//failure callback
+			function (){
+				alert("cannot create offer");
+			},
+			null);//options
 		
 		console.log('answer sent');
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
@@ -297,10 +311,10 @@ document.getElementById("name").onblur = function(){
 
 window.onbeforeunload = function(){
 	if(typeof(clientTextChannel) != 'undefined'){
-		clientTextChannel.send("<b>"+document.getElementById("name")+"</b> left");
+		clientTextChannel.send("<b>"+document.getElementById("name").value+"</b> left");
 	}
 	if(typeof(ownerTextChannel) != 'undefined'){
-		ownerTextChannel.send("<b>"+document.getElementById("name")+"</b> left");
+		ownerTextChannel.send("<b>"+document.getElementById("name").value+"</b> left");
 	}
 }
 
