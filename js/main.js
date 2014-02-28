@@ -242,6 +242,7 @@ function gotReceiveChannel(event) {
 	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
 	clientTextChannel.onopen = function () {
 		//TODO : on connection behaviour : enabling typing, 'person connected', etc
+		joined();
 	};
 }
 /***
@@ -284,22 +285,21 @@ function sendData(){
 		if(typeof(ownerTextChannel) != 'undefined'){
 			ownerTextChannel.send("<b>"+document.getElementById("name").value+"</b> : "+toSend.value);
 		}
-		//once message sent, textarea is cleared and focused once new (in button clicked case)
-		toSend.value = '';
-		toSend.focus();
 	}
+	//once message sent, textarea is cleared and focused once new (in button clicked case)
+	toSend.value = '';
+	toSend.focus();
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 	}
 }
 
-
-document.getElementById("name").onblur = function(){
+function joined(){
 	try{
 	document.getElementById("messages").innerHTML += "<p><i>"+document.getElementById("name").value +" joined</i></p>";
-		if(typeof(clientTextChannel) != 'undefined'){
+		/*if(typeof(clientTextChannel) != 'undefined'){
 			clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
-		}
+		}*/
 		if(typeof(ownerTextChannel) != 'undefined'){
 			ownerTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
 		}
