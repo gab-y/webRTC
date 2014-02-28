@@ -286,9 +286,6 @@ function sendData(){
 			ownerTextChannel.send("<b>"+document.getElementById("name").value+"</b> : "+toSend.value);
 		}
 	}
-	//once message sent, textarea is cleared and focused once new (in button clicked case)
-	toSend.value = '';
-	toSend.focus();
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 	}
