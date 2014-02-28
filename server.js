@@ -11,14 +11,13 @@ Please note that the app is builded for only TWO users
 /*** modules needed ***/
 var static = require('node-static');
 var http = require('http');
-//io
 
 /*** server creation ***/
 //static server uses index.html
 var file = new(static.Server)();
 var app = http.createServer(function (req, res) {
   file.serve(req, res);
-}).listen(2013);
+}).listen(process.env.PORT);//2013);
 var io = require('socket.io').listen(app);
 
 /*** socket creation ***/
