@@ -120,6 +120,7 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand){
+	console.log("received ice candidate, current state is "+ connectionRole);
 	if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
 		try{
 		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
@@ -146,8 +147,6 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 				console.log("adding ice candidate failed");
 				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 			}
-		}else{//if own and remote connections are both defined
-			console.log('received ice, but nothing to do');
 		}
 	}
 });
