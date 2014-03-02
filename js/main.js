@@ -105,6 +105,7 @@ socket.on('start',function(){
 			},
 			//failure callback
 			function (){
+				console.log("cannot create offer");
 				alert("cannot create offer");
 			},
 			null);//options - optionnal
@@ -128,6 +129,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 			}));
 		}catch(e){
 			alert('adding ice candidate failed');
+			console.log("adding ice candidate failed");
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
 	}
@@ -141,6 +143,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 				}));
 			}catch(e){
 				alert('adding ice candidate failed');
+				console.log("adding ice candidate failed");
 				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 			}
 		}else{//if own and remote connections are both defined
@@ -158,10 +161,10 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 function sendIceCandidate(event){
 	if(event.candidate){
 		console.log('sending ice candidate success');
-		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//candidate object has to be divided, it's strange
+		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//JS: candidate object has to be divided
 	}
 	else{
-		console.log('onicecandidate returned an event but it\'s not a candidate...');
+		console.log('no more candidates ?');
 	}
 }
 
@@ -176,6 +179,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		try {
 			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
 		} catch (e) {
+			console.log("RTCPeerConnection failed");
 			alert('RTCPeerConnection failed');
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
@@ -192,6 +196,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 			},
 			//failure callback
 			function (){
+				console.log("cannot create offer");
 				alert("cannot create offer");
 			},
 			null);//options
