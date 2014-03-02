@@ -185,7 +185,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		}
 		//set remote description from the one received
 		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
-		trace('Offer received :\n' + offerSessionDescription.sdp);//trace equals to log
+		trace('Offer received :\n' + offererSessionDescription.sdp);//trace equals to log
 		
 		//create session description from our browser
 		//JS : finally... what's createAnswer parameter ?
