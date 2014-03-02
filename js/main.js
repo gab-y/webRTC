@@ -228,7 +228,7 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 	if(connectionRole == CLIENT){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
-		trace('Answer received :\n' + offerSessionDescription.sdp);//trace equals to log
+		trace('Answer received :\n' + answererSessionDescription.sdp);//trace equals to log
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
