@@ -100,7 +100,7 @@ socket.on('start',function(){
 			//success callback - mandatory
 			function (sessionDescription) {
 				ownerPeerConnection.setLocalDescription(sessionDescription);
-				trace('Offer from localPeerConnection \n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
+				trace('Offer to be sent :\n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
 				socket.emit('offerSessionDescription',sessionDescription);
 			},
 			//failure callback
@@ -185,6 +185,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		}
 		//set remote description from the one received
 		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
+		trace('Offer received :\n' + offerSessionDescription.sdp);//trace equals to log
 		
 		//create session description from our browser
 		//JS : finally... what's createAnswer parameter ?
@@ -192,6 +193,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 			//success callback
 			function (sessionDescription) {
 				clientPeerConnection.setLocalDescription(sessionDescription);
+				trace('Answer to be sent :\n' + sessionDescription.sdp);//trace equals to log 
 				socket.emit('answerToOffer',sessionDescription);
 			},
 			//failure callback
@@ -226,6 +228,7 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 	if(connectionRole == CLIENT){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
+		trace('Answer received :\n' + offerSessionDescription.sdp);//trace equals to log
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
