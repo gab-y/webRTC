@@ -120,14 +120,13 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand){
-	var iceCandidate = JSON.parse(rcand);
 	console.log("received ice candidate, current state is "+ connectionRole);
 	if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
 		try{
 		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
 			sdpMLineIndex: rsdp, 
 			sdpMid: rmid,
-			candidate: iceCandidate
+			candidate: rcand
 			}));
 		}catch(e){
 			alert('adding ice candidate failed');
@@ -141,7 +140,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
 				sdpMLineIndex: rsdp,
 				sdpMid: rmid,
-				candidate: iceCandidate
+				candidate: rcand
 				}));
 			}catch(e){
 				alert('adding ice candidate failed');
@@ -161,7 +160,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 function sendIceCandidate(event){
 	if(event.candidate){
 		console.log('sending ice candidate success');
-		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, JSON.stringify(event.candidate.candidate));//JS: candidate object has to be divided
+		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//JS: candidate object has to be divided
 	}
 	else{
 		console.log('no more candidates ?');
