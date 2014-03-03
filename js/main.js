@@ -109,7 +109,7 @@ socket.on('start',function(){
 				alert("cannot create offer");
 			},
 			null);//options - optionnal
-		//ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 	}
 });
@@ -142,7 +142,6 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 				sdpMid: rmid,
 				candidate: rcand
 				}));
-			clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 			}catch(e){
 				alert('adding ice candidate failed');
 				console.log("adding ice candidate failed");
@@ -204,7 +203,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		
 		console.log('answer sent');
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
-		//clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
+		clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 		clientPeerConnection.oniceconnectionstatechange = function(){
 			if(clientPeerConnection.iceConnectionState == 'disconnected'){
@@ -228,9 +227,6 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
 		trace('Answer received :\n' + answererSessionDescription.sdp);//trace equals to log
-		
-		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
-		
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
