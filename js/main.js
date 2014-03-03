@@ -101,9 +101,9 @@ socket.on('start',function(){
 			function (sessionDescription) {
 				ownerPeerConnection.setLocalDescription(sessionDescription);
 				trace('Offer to be sent :\n' + sessionDescription.sdp);//trace equals to console.log. Comes from Google's adapter.js
-				socket.emit('offerSessionDescription',sessionDescription);
+				socket.emit('offerSessionDescription',JSON.stringify(sessionDescription));
 			},
-			//failure callback
+			//failure callback - mandatory
 			function (){
 				console.log("cannot create offer");
 				alert("cannot create offer");
@@ -173,6 +173,7 @@ function sendIceCandidate(event){
 	Sent when server gets initiator's RTC offer
 ***/
 socket.on('offerSessionDescription', function(offererSessionDescription){
+	var offer = JSON.parse(offererSessionDescription);
 	if(connectionRole == NONE || connectionRole == OWNER){
 		console.log('received offer');
 		try {
@@ -183,17 +184,16 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
 		//set remote description from the one received
-		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
-		trace('Offer received :\n' + offererSessionDescription.sdp);//trace equals to log
+		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offer));
+		trace('Offer received :\n' + offer.sdp);//trace equals to log
 		
 		//create session description from our browser
-		//JS : finally... what's createAnswer parameter ?
 		clientPeerConnection.createAnswer(
 			//success callback
 			function (sessionDescription) {
 				clientPeerConnection.setLocalDescription(sessionDescription);
 				trace('Answer to be sent :\n' + sessionDescription.sdp);//trace equals to log 
-				socket.emit('answerToOffer',sessionDescription);
+				socket.emit('answerToOffer',JSON.stringify(sessionDescription));
 			},
 			//failure callback
 			function (){
@@ -224,10 +224,11 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 	Sent when server gets answerer's RTC answer to initiator's offer
 ***/
 socket.on('answerSessionDescription', function(answererSessionDescription){
+	var answer = JSON.parse(answererSessionDescription);
 	if(connectionRole == CLIENT){
 		console.log('received answer');
-		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
-		trace('Answer received :\n' + answererSessionDescription.sdp);//trace equals to log
+		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answer));
+		trace('Answer received :\n' + answer.sdp);//trace equals to log
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
