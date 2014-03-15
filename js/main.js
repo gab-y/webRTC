@@ -82,7 +82,7 @@ socket.on('start',function(){
 		}
 		//create data channel (global too)
 		try {
-			ownerTextChannel = ownerPeerConnection.createDataChannel({reliable: true});//reliable : guarantee messages arrive, and their order. Potentially slower. 
+			ownerTextChannel = ownerPeerConnection.createDataChannel({reliable: false});//reliable : guarantee messages arrive, and their order. Potentially slower. 
 				// TODO : Chrome doesn't handle reliable mode ?
 		} catch (e) {
 			alert('Send channel creation failed');
