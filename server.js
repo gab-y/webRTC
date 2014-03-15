@@ -19,17 +19,19 @@ var app = http.createServer(function (req, res) {
   file.serve(req, res);
 }).listen(process.env.PORT || 2013);//2013);
 var io = require('socket.io').listen(app);
+var count = 0;
 
 /*** socket creation ***/
 //on('connection') means one browser connect to socket
 io.sockets.on('connection', function(socket){
-	socket.broadcast.emit('new connection');
+	count++;
+	socket.broadcast.emit('new connection',count);
 	socket.broadcast.emit('start');
 	
 /*** socket functions ***/
 	//on(sendIceCandidate) : broadcasts received ice candidate
-	socket.on('sendIceCandidate',function(sdpMLine,sdpMid,candidate){
-		socket.broadcast.emit('iceCandidate',sdpMLine, sdpMid, candidate);
+	socket.on('sendIceCandidate',function(sdpMLine,sdpMid,candidate,appID){
+		socket.broadcast.emit('iceCandidate',sdpMLine, sdpMid, candidate, appID);
 	});
 	
 	//on(offerSessionDescription) : broadcasts received offer

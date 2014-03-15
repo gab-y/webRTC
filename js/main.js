@@ -34,6 +34,8 @@ var ownerPeerConnection;
 var clientTextChannel;
 var clientPeerConnection;
 
+var appID = 0;
+
 /*** connection roles ***/
 			//  Client used - Owner used
 var NONE = 0;//      No           No
@@ -59,9 +61,13 @@ var socket = io.connect();//connect to server's websocket. Answers if you are fi
 	Send when a navigator connects to the server
 	Increments role, from 0 follower, 1 initiator, more : full
 ***/
-socket.on('new connection',function(){
+socket.on('new connection',function(count){
 	connectionRole = connectionRole == NONE ? CLIENT : BOTH; 
 	console.log('status : '+connectionRole);
+	if(appID == 0){
+		appID = count;
+		console.log("I'm #"+appID+" !");
+	}
 });
 
 /***
@@ -119,26 +125,13 @@ socket.on('start',function(){
 	Add to peer connection object the ice candidate received
 	Sent each time the server get an ice candidate
 ***/
-socket.on('iceCandidate',function(rsdp, rmid, rcand){
-	console.log("received ice candidate, current state is "+ connectionRole);
-	if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
-		try{
-		ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
-			sdpMLineIndex: rsdp, 
-			sdpMid: rmid,
-			candidate: rcand
-			}));
-		}catch(e){
-			alert('adding ice candidate failed');
-			console.log("adding ice candidate failed");
-			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
-		}
-	}
-	else{ 
-		if(connectionRole == NONE || connectionRole == OWNER){//if following a connexion, add candidate to remote connection
+socket.on('iceCandidate',function(rsdp, rmid, rcand, senderID){
+	if(senderID != appID){
+		console.log("received ice candidate from "+senderID+", current state is "+ connectionRole);
+		if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
 			try{
-			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
-				sdpMLineIndex: rsdp,
+			ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
+				sdpMLineIndex: rsdp, 
 				sdpMid: rmid,
 				candidate: rcand
 				}));
@@ -146,6 +139,21 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 				alert('adding ice candidate failed');
 				console.log("adding ice candidate failed");
 				trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+			}
+		}
+		else{ 
+			if(connectionRole == NONE || connectionRole == OWNER){//if following a connexion, add candidate to remote connection
+				try{
+				clientPeerConnection.addIceCandidate(new RTCIceCandidate({
+					sdpMLineIndex: rsdp,
+					sdpMid: rmid,
+					candidate: rcand
+					}));
+				}catch(e){
+					alert('adding ice candidate failed');
+					console.log("adding ice candidate failed");
+					trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+				}
 			}
 		}
 	}
@@ -160,7 +168,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand){
 function sendIceCandidate(event){
 	if(event.candidate){
 		console.log('sending ice candidate success');
-		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate);//JS: candidate object has to be divided
+		socket.emit('sendIceCandidate',event.candidate.sdpMLineIndex, event.candidate.sdpMid, event.candidate.candidate, appID);//JS: candidate object has to be divided
 	}
 	else{
 		console.log('no more candidates ?');
