@@ -54,6 +54,9 @@ var pc_constraints = null;//constraints about media
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
+var ownerTimer;
+var clientTimer;
+
 //JS : socket.on = socket messages listeners
 
 /***
@@ -95,10 +98,6 @@ socket.on('start',function(){
 			console.log(e.message);
 		}
 		ownerTextChannel.onmessage = ownerMessage;//message receiving listener
-		ownerTextChannel.onopen = function () {
-			//TODO : on connection behaviour : enabling typing, 'person connected', etc
-			joined();
-		};
 		
 		//creates an offer and a session description and send them
 		//JS : finally, what are createOffer parameters ?
@@ -222,6 +221,14 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 				socket.emit('reorder');
 			}
 		}
+		clientTimer = setTimeout(function(){
+			if(clientPeerConnection.iceConnectionState == 'checking'){
+				console.log('connection seem to have failed');
+				connectionRole = connectionRole == BOTH ? OWNER : NONE;
+				clientPeerConnection.close();
+				clientPeerChannel.close();
+			}
+		},10000);
 	}
 });
 
@@ -243,7 +250,15 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 				ownerTextChannel.close();
 				socket.emit('reorder');
 			}
-		}		
+		}
+		ownerTimer = setTimeout(function(){
+			if(ownerPeerConnection.iceConnectionState == 'checking'){
+				console.log('connection seem to have failed');
+				connectionRole = CLIENT;
+				ownerPeerConnection.close();
+				ownerPeerChannel.close();
+			}
+		},10000);
 	}	
 });
 
@@ -257,10 +272,11 @@ function gotReceiveChannel(event) {
 	console.log('receive channel');
 	clientTextChannel = event.channel;
 	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
-	clientTextChannel.onopen = function () {
-		//TODO : on connection behaviour : enabling typing, 'person connected', etc
-		joined();
-	};
+	if(connectionRole == NONE){
+		clientTextChannel.onopen = function () {
+			joinedToClient();
+		};
+	}
 }
 /***
 	handling messages functions
@@ -277,14 +293,16 @@ function clientMessage(event){
 	
 function handleMessage(channel,data){
 	console.log('got message');
-	document.getElementById("messages").innerHTML += "<p>"+data+"</p>";
-	if(typeof(channel) != 'undefined'){
+	document.getElementById("messages").innerHTML += "<div>"+data+"</div>";
+	if(channel != null && typeof(channel) != 'undefined'){
 		try {
 			channel.send(data);
 		}catch(e){
 			trace(e.message);
 		}
 	}
+	var messages = document.getElementById("messages").getElementsByTagName("div");
+	messages[messages.length - 1].scrollIntoView(true);
 }
 
 /***
@@ -295,7 +313,7 @@ function handleMessage(channel,data){
 function sendData(){
 	var toSend = document.getElementById("toSend");
 	try{
-		document.getElementById("messages").innerHTML += "<p><b>"+document.getElementById("name").value+"</b> : "+ toSend.value +"</p>";
+		handleMessage(null,"<b>"+document.getElementById("name").value+"</b> : "+ toSend.value);
 		if(typeof(clientTextChannel) != 'undefined'){
 			clientTextChannel.send("<b>"+document.getElementById("name").value+"</b> : "+toSend.value);
 		}
@@ -311,15 +329,9 @@ function sendData(){
 	toSend.focus();
 }
 
-function joined(){
+function joinedToClient(){
 	try{
-	document.getElementById("messages").innerHTML += "<p><i>"+document.getElementById("name").value +" joined</i></p>";
-		/*if(typeof(clientTextChannel) != 'undefined'){
-			clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
-		}*/
-		if(typeof(ownerTextChannel) != 'undefined'){
-			ownerTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
-		}
+		clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
 	}
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js

@@ -2,14 +2,47 @@
 <html>
 	<body>
 		<div id="messages"></div>
-		<input type='text' id='name'><br>
-		<textarea id="toSend" autofocus></textarea>
-		<button id="send">Send</button>
+		<div id="texts">
+			<input type='text' id='name'>
+			<button id="send">Send</button>
+			<br>
+			<textarea id="toSend" autofocus></textarea>
+		</div>
 	</body>
 	<script src="/socket.io/socket.io.js"></script><!-- Web socket -->
 	<script src='js/lib/adapter.js'></script><!-- Library handling Mozilla/Google objects' names differences --> 
 	<script src="js/main.js"></script><!-- Our app -->
 
-	
+	<style>
+		html {
+			height: 95%;
+		}	
+		body {
+			height: 100%;
+		}
+		#messages {
+			overflow-y: auto;
+			height: 60%;
+			width: 40%;
+			margin-left: auto;
+			margin-right: auto;
+			min-width: 380px;
+		}
+		#texts {
+			width: 40%;
+			margin-left: auto;
+			margin-right: auto;
+			min-width: 380px;
+		}
+		textarea {
+			width: 98%;
+			overflow-y: scroll;
+			resize: none;
+			height: 64px;
+		}
+		div {
+			margin-top: 10px;
+		}
+	</style>
 </html>
 		
