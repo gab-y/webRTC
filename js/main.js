@@ -47,10 +47,34 @@ var connectionRole = NONE;//initialized with no connections
 
 //ice servers addresses to open users NATs
 var pc_config = webrtcDetectedBrowser === 'firefox' ?
-  {'iceServers':[{'url':'stun:23.21.150.121'}]} :
-  {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
+  {'iceServers':[
+	{'url':'stun:23.21.150.121'},
+    {
+      'url': 'turn:numb.viagenie.ca:3478?transport=udp',
+      'credential': 'soublavetin',
+      'username': 'gabriel.guilbart@gmail.com'
+    },
+    {
+      'url': 'turn:numb.viagenie.ca:3478?transport=tcp',
+      'credential': 'soublavetin',
+      'username': 'gabriel.guilbart@gmail.com'
+    }	
+]} : {'iceServers': [
+	{'url': 'stun:stun.l.google.com:19302'},
+    {
+      'url': 'turn:numb.viagenie.ca:3478?transport=udp',
+      'credential': 'soublavetin',
+      'username': 'gabriel.guilbart@gmail.com'
+    },
+    {
+      'url': 'turn:numb.viagenie.ca:3478?transport=tcp',
+      'credential': 'soublavetin',
+      'username': 'gabriel.guilbart@gmail.com'
+    }
+]};
   
 var pc_constraints = null;//constraints about media
+
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
@@ -226,7 +250,6 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 				console.log('connection seem to have failed');
 				connectionRole = connectionRole == BOTH ? OWNER : NONE;
 				clientPeerConnection.close();
-				clientPeerChannel.close();
 			}
 		},10000);
 	}
@@ -256,7 +279,6 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 				console.log('connection seem to have failed');
 				connectionRole = CLIENT;
 				ownerPeerConnection.close();
-				ownerPeerChannel.close();
 			}
 		},10000);
 	}	
@@ -340,10 +362,10 @@ function joinedToClient(){
 
 window.onbeforeunload = function(){
 	if(typeof(clientTextChannel) != 'undefined'){
-		clientTextChannel.send("<b>"+document.getElementById("name").value+"</b> left");
+		clientTextChannel.send("<i>"+document.getElementById("name").value+" left </i>");
 	}
 	if(typeof(ownerTextChannel) != 'undefined'){
-		ownerTextChannel.send("<b>"+document.getElementById("name").value+"</b> left");
+		ownerTextChannel.send("<i>"+document.getElementById("name").value+" left </i>");
 	}
 }
 
