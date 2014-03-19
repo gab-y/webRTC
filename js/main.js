@@ -50,26 +50,16 @@ var pc_config = webrtcDetectedBrowser === 'firefox' ?
   {'iceServers':[
 	{'url':'stun:23.21.150.121'},
     {
-      'url': 'turn:numb.viagenie.ca:3478?transport=udp',
-      'credential': 'soublavetin',
-      'username': 'gabriel.guilbart@gmail.com'
-    },
-    {
-      'url': 'turn:numb.viagenie.ca:3478?transport=tcp',
-      'credential': 'soublavetin',
-      'username': 'gabriel.guilbart@gmail.com'
+      'url': 'turn:numb.viagenie.ca:3478',
+      'username': 'gabriel.guilbart@gmail.com',
+      'credential': 'soublavetin'
     }	
 ]} : {'iceServers': [
 	{'url': 'stun:stun.l.google.com:19302'},
     {
-      'url': 'turn:numb.viagenie.ca:3478?transport=udp',
-      'credential': 'soublavetin',
-      'username': 'gabriel.guilbart@gmail.com'
-    },
-    {
-      'url': 'turn:numb.viagenie.ca:3478?transport=tcp',
-      'credential': 'soublavetin',
-      'username': 'gabriel.guilbart@gmail.com'
+      'url': 'turn:numb.viagenie.ca:3478',
+      'username': 'gabriel.guilbart@gmail.com',
+      'credential': 'soublavetin'
     }
 ]};
   
