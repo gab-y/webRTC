@@ -20,7 +20,8 @@ document.getElementById("toSend").onkeypress = function(event){
 		sendData();//JS : () needed !
 	};
 }
-document.getElementById("name").value = Math.floor(Math.random()*10001);
+
+document.getElementById("name").value = Math.floor(Math.random()*10001);//give a random number name for users
 
 /*** connection globals ***/
 //textChannels : webRTC dataChannel objects, to send any kind of data, text, files...
@@ -34,7 +35,7 @@ var ownerPeerConnection;
 var clientTextChannel;
 var clientPeerConnection;
 
-var appID = 0;
+var appID = 0;//this app ID. Thanks to it this app ignore its own icecandidates carried by server (see socket.onicecandidate)
 
 /*** connection roles ***/
 			//  Client used - Owner used
@@ -48,14 +49,18 @@ var connectionRole = NONE;//initialized with no connections
 //ice servers addresses to open users NATs
 var pc_config = webrtcDetectedBrowser === 'firefox' ?
   {'iceServers':[
+	//mozilla's stun
 	{'url':'stun:23.21.150.121'},
+	//viagenie.ca's turn
     {
       'url': 'turn:numb.viagenie.ca:3478',
       'username': 'gabriel.guilbart@gmail.com',
       'credential': 'soublavetin'
     }	
 ]} : {'iceServers': [
+	//google's stun
 	{'url': 'stun:stun.l.google.com:19302'},
+	//viagenie.ca's turn
     {
       'url': 'turn:numb.viagenie.ca:3478',
       'username': 'gabriel.guilbart@gmail.com',
@@ -68,6 +73,7 @@ var pc_constraints = null;//constraints about media
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
+//connection attempt timers. If it take too much time attempt is cancelled. These timers are used because ICE agent doesn't seem to get aware of misconnections 
 var ownerTimer;
 var clientTimer;
 
@@ -75,21 +81,21 @@ var clientTimer;
 
 /***
 	'new connection' server's message listener
-	Send when a navigator connects to the server
-	Increments role, from 0 follower, 1 initiator, more : full
+	Send when a navigator connects to the server (but not at this app connection !)
+	Changes connectionRole
 ***/
 socket.on('new connection',function(count){
 	connectionRole = connectionRole == NONE ? CLIENT : BOTH; 
 	console.log('status : '+connectionRole);
 	if(appID == 0){
-		appID = count;
+		appID = count;//getting ID from socket
 		console.log("I'm #"+appID+" !");
 	}
 });
 
 /***
 	'Start' server's message listener
-	If in initiator role, launches connections (owner) and send its ice candidate. If not, do nothing
+	If in initiator (=CLIENT) role, launches connections (owner) and send its ice candidate. If not, do nothing
 	Sent when a navigator connected, and there are at least two navigators connected to the server
 ***/
 socket.on('start',function(){
@@ -106,7 +112,6 @@ socket.on('start',function(){
 		//create data channel (global too)
 		try {
 			ownerTextChannel = ownerPeerConnection.createDataChannel({reliable: false});//reliable : guarantee messages arrive, and their order. Potentially slower. 
-				// TODO : Chrome doesn't handle reliable mode ?
 		} catch (e) {
 			alert('Send channel creation failed');
 			console.log(e.message);
@@ -127,7 +132,7 @@ socket.on('start',function(){
 				console.log("cannot create offer");
 				alert("cannot create offer");
 			},
-			null);//options - optionnal
+			null);//options - optional
 		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 	}
@@ -139,7 +144,7 @@ socket.on('start',function(){
 	Sent each time the server get an ice candidate
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand, senderID){
-	if(senderID != appID){
+	if(senderID != appID){//check it's not this app own candidates
 		console.log("received ice candidate from "+senderID+", current state is "+ connectionRole);
 		if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
 			try{
@@ -194,7 +199,7 @@ function sendIceCandidate(event){
 	Sent when server gets initiator's RTC offer
 ***/
 socket.on('offerSessionDescription', function(offererSessionDescription){
-	if(connectionRole == NONE || connectionRole == OWNER){
+	if(connectionRole == NONE || connectionRole == OWNER){//not communication initiator
 		console.log('received offer');
 		try {
 			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
@@ -226,17 +231,21 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
 		clientPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
+		
+		//on disconnection callback function 
+		//close clientConnection and change connectionRole
 		clientPeerConnection.oniceconnectionstatechange = function(){
 			if(clientPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('client disconnected');
 				connectionRole = connectionRole == BOTH ? OWNER : NONE;
 				clientPeerConnection.close();
 				clientTextChannel.close();
-				socket.emit('reorder');
+				socket.emit('reorder');//ask to rebuild connections
 			}
 		}
+		//10 seconds after a connection is attempted, checks if it's succeed, if not, cancels 
 		clientTimer = setTimeout(function(){
-			if(clientPeerConnection.iceConnectionState == 'checking'){
+			if(clientPeerConnection.iceConnectionState == 'checking'){//if ice agent is still checking connections (not an usual behaviour)
 				console.log('connection seem to have failed');
 				connectionRole = connectionRole == BOTH ? OWNER : NONE;
 				clientPeerConnection.close();
@@ -247,7 +256,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 
 /***
 	'answerSessionDescription' server's message listener
-	Initiator : set remote description on own connection from answer. Not initiator : nothing.
+	Initiator (CLIENT) : set remote description on own connection from answer. Not initiator : nothing.
 	Sent when server gets answerer's RTC answer to initiator's offer
 ***/
 socket.on('answerSessionDescription', function(answererSessionDescription){
@@ -255,15 +264,19 @@ socket.on('answerSessionDescription', function(answererSessionDescription){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
 		trace('Answer received :\n' + answererSessionDescription.sdp);//trace equals to log
+		
+		//on disconnection callback function
+		//close ownerConnection and change connectionRole
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
 				connectionRole = CLIENT;
 				ownerPeerConnection.close();
 				ownerTextChannel.close();
-				socket.emit('reorder');
+				socket.emit('reorder');//ask to rebuild connections
 			}
 		}
+		//10 seconds after a connection is attempted, checks if it's succeed, if not, cancels 
 		ownerTimer = setTimeout(function(){
 			if(ownerPeerConnection.iceConnectionState == 'checking'){
 				console.log('connection seem to have failed');
@@ -284,9 +297,10 @@ function gotReceiveChannel(event) {
 	console.log('receive channel');
 	clientTextChannel = event.channel;
 	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
+	
 	if(connectionRole == NONE){
 		clientTextChannel.onopen = function () {
-			joinedToClient();
+			joinedToClient();//when client channel opens, send through it a connection message
 		};
 	}
 }
@@ -305,14 +319,16 @@ function clientMessage(event){
 	
 function handleMessage(channel,data){
 	console.log('got message');
-	document.getElementById("messages").innerHTML += "<div>"+data+"</div>";
-	if(channel != null && typeof(channel) != 'undefined'){
+	document.getElementById("messages").innerHTML += "<div>"+data+"</div>";//display message
+	if(channel != null && typeof(channel) != 'undefined'){//resend message through the other channel
 		try {
 			channel.send(data);
 		}catch(e){
 			trace(e.message);
 		}
 	}
+	
+	//displaying : scroll to the last message
 	var messages = document.getElementById("messages").getElementsByTagName("div");
 	messages[messages.length - 1].scrollIntoView(true);
 }
@@ -336,11 +352,16 @@ function sendData(){
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 	}
-	//once message sent, textarea is cleared and focused once new (in button clicked case)
+	//displaying : once message sent, textarea is cleared and focused once new (in button clicked case)
 	toSend.value = '';
 	toSend.focus();
 }
 
+/***
+	joinedToClient function
+	Displaying : Send a message as client to tell its connection
+	Called when clienttextChannel opens
+***/
 function joinedToClient(){
 	try{
 		clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
@@ -350,6 +371,10 @@ function joinedToClient(){
 	}
 }
 
+/***
+	on closing navigator listener
+	Displaying : send a message to tell its leaving
+***/
 window.onbeforeunload = function(){
 	if(typeof(clientTextChannel) != 'undefined'){
 		clientTextChannel.send("<i>"+document.getElementById("name").value+" left </i>");
