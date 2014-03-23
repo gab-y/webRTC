@@ -151,6 +151,8 @@ socket.on('start',function(){
 				ownerUsed = false;
 				ownerPeerConnection.close();
 				ownerTextChannel.close();
+				ownerPeerConnection = null;
+				ownerTextChannel = null;
 			}
 		},10000);
 	}
@@ -260,6 +262,8 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 				clientUsed = false;
 				clientPeerConnection.close();
 				clientTextChannel.close();
+				clientPeerConnection = null;
+				clientTextChannel = null;
 				socket.emit('reorder');//ask to rebuild connections
 			}
 			if(clientPeerConnection.iceConnectionState == 'connected'){
@@ -399,10 +403,10 @@ function joinedToClient(){
 ***/
 window.onbeforeunload = function(){
 	if(typeof(clientTextChannel) != 'undefined'){
-		clientTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait for next system message. </i>");
+		clientTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait a little. </i>");
 	}
 	if(typeof(ownerTextChannel) != 'undefined'){
-		ownerTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait for next system message. </i>");
+		ownerTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait a little. </i>");
 	}
 }
 
