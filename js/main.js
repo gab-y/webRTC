@@ -39,11 +39,14 @@ var appID = 0;//this app ID. Thanks to it this app ignore its own icecandidates 
 
 /*** connection roles ***/
 			//  Client used - Owner used
-var NONE = 0;//      No           No
+/*var NONE = 0;//      No           No
 var CLIENT = 1;//    Yes          No        First connection is considered with client connection used
 var BOTH = 2;//      Yes          Yes
 var OWNER = 3;//     No           Yes       Only in disconnection case
-var connectionRole = NONE;//initialized with no connections
+*/
+var clientUsed = false; var ownerUsed = false;
+
+//var connectionRole = NONE;//initialized with no connections
 //The js file is the same whether you are initiator or not but the instructions are not.
 
 //ice servers addresses to open users NATs
@@ -85,8 +88,11 @@ var clientTimer;
 	Changes connectionRole
 ***/
 socket.on('new connection',function(count){
-	connectionRole = connectionRole == NONE ? CLIENT : BOTH; 
-	console.log('status : '+connectionRole);
+	//connectionRole = connectionRole == NONE ? CLIENT : BOTH;//when a new user connects connectionRole changes
+	if(!ownerUsed){
+		clientUsed = true;
+	}
+	//console.log('status : '+connectionRole);
 	if(appID == 0){
 		appID = count;//getting ID from socket
 		console.log("I'm #"+appID+" !");
@@ -100,10 +106,11 @@ socket.on('new connection',function(count){
 ***/
 socket.on('start',function(){
 	console.log('receive start');
-	if(connectionRole == CLIENT){
+	if(clientUsed && !ownerUsed){
 		//create peer connection (global)
 		try {
 			ownerPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
+			console.log("RTCPeerConnection succeeded");
 		} catch (e) {
 			//JS : alert display a window
 			alert('RTCPeerConnection failed');
@@ -135,6 +142,17 @@ socket.on('start',function(){
 			null);//options - optional
 		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
+		
+		//10 seconds after a connection is attempted, checks if it's succeed, if not, cancels 
+		ownerTimer = setTimeout(function(){
+			if(ownerPeerConnection.iceConnectionState == 'checking'){
+				console.log('connection seems to have failed');
+				//connectionRole = CLIENT;
+				ownerUsed = false;
+				ownerPeerConnection.close();
+				ownerTextChannel.close();
+			}
+		},10000);
 	}
 });
 
@@ -145,8 +163,8 @@ socket.on('start',function(){
 ***/
 socket.on('iceCandidate',function(rsdp, rmid, rcand, senderID){
 	if(senderID != appID){//check it's not this app own candidates
-		console.log("received ice candidate from "+senderID+", current state is "+ connectionRole);
-		if(connectionRole == CLIENT){//if launching a connexion, add candidate to own connection
+		//console.log("received ice candidate from "+senderID+", current state is "+ connectionRole);
+		if(clientUsed && !ownerUsed){//if launching a connexion, add candidate to own connection
 			try{
 			ownerPeerConnection.addIceCandidate(new RTCIceCandidate({
 				sdpMLineIndex: rsdp, 
@@ -160,7 +178,7 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand, senderID){
 			}
 		}
 		else{ 
-			if(connectionRole == NONE || connectionRole == OWNER){//if following a connexion, add candidate to remote connection
+			if(!clientUsed){//if following a connexion, add candidate to remote connection
 				try{
 				clientPeerConnection.addIceCandidate(new RTCIceCandidate({
 					sdpMLineIndex: rsdp,
@@ -199,10 +217,11 @@ function sendIceCandidate(event){
 	Sent when server gets initiator's RTC offer
 ***/
 socket.on('offerSessionDescription', function(offererSessionDescription){
-	if(connectionRole == NONE || connectionRole == OWNER){//not communication initiator
+	if(!clientUsed){//not communication initiator
 		console.log('received offer');
 		try {
 			clientPeerConnection = new RTCPeerConnection(pc_config, pc_constraints);
+			console.log("RTCPeerConnection succeeded");
 		} catch (e) {
 			console.log("RTCPeerConnection failed");
 			alert('RTCPeerConnection failed');
@@ -237,17 +256,24 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 		clientPeerConnection.oniceconnectionstatechange = function(){
 			if(clientPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('client disconnected');
-				connectionRole = connectionRole == BOTH ? OWNER : NONE;
+				//connectionRole = connectionRole == BOTH ? OWNER : NONE; 
+				clientUsed = false;
 				clientPeerConnection.close();
 				clientTextChannel.close();
 				socket.emit('reorder');//ask to rebuild connections
+			}
+			if(clientPeerConnection.iceConnectionState == 'connected'){
+				clientUsed = true;
+				handleMessage(null,"<i>Connected</i>");
 			}
 		}
 		//10 seconds after a connection is attempted, checks if it's succeed, if not, cancels 
 		clientTimer = setTimeout(function(){
 			if(clientPeerConnection.iceConnectionState == 'checking'){//if ice agent is still checking connections (not an usual behaviour)
-				console.log('connection seem to have failed');
-				connectionRole = connectionRole == BOTH ? OWNER : NONE;
+				console.log('connection seems to have failed');
+				handleMessage(null, "<i>Connection seems to have failed, please reload</i>");
+				//connectionRole = connectionRole == BOTH ? OWNER : NONE;
+				clientUsed = false;
 				clientPeerConnection.close();
 			}
 		},10000);
@@ -260,30 +286,26 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 	Sent when server gets answerer's RTC answer to initiator's offer
 ***/
 socket.on('answerSessionDescription', function(answererSessionDescription){
-	if(connectionRole == CLIENT){
+	if(clientUsed && !ownerUsed){
 		console.log('received answer');
 		ownerPeerConnection.setRemoteDescription( new RTCSessionDescription (answererSessionDescription));
 		trace('Answer received :\n' + answererSessionDescription.sdp);//trace equals to log
-		
 		//on disconnection callback function
 		//close ownerConnection and change connectionRole
+		// !! take several seconds to detect disconnection
 		ownerPeerConnection.oniceconnectionstatechange = function(){
 			if(ownerPeerConnection.iceConnectionState == 'disconnected'){
 				console.log('owner disconnected');
-				connectionRole = CLIENT;
+				//connectionRole = CLIENT;
+				ownerUsed = false;
 				ownerPeerConnection.close();
 				ownerTextChannel.close();
-				socket.emit('reorder');//ask to rebuild connections
+				//socket.emit('reorder');//ask to rebuild connections
+			}
+			if(ownerPeerConnection.iceConnectionState == 'connected'){
+				ownerUsed = true;
 			}
 		}
-		//10 seconds after a connection is attempted, checks if it's succeed, if not, cancels 
-		ownerTimer = setTimeout(function(){
-			if(ownerPeerConnection.iceConnectionState == 'checking'){
-				console.log('connection seem to have failed');
-				connectionRole = CLIENT;
-				ownerPeerConnection.close();
-			}
-		},10000);
 	}	
 });
 
@@ -298,11 +320,11 @@ function gotReceiveChannel(event) {
 	clientTextChannel = event.channel;
 	clientTextChannel.onmessage = clientMessage;//when the app gets a message, call clientMessage, which displays it and transmit it through other connection
 	
-	if(connectionRole == NONE){
+	//if(!ownerUsed && !clientUsed){
 		clientTextChannel.onopen = function () {
 			joinedToClient();//when client channel opens, send through it a connection message
 		};
-	}
+	//}
 }
 /***
 	handling messages functions
@@ -364,7 +386,7 @@ function sendData(){
 ***/
 function joinedToClient(){
 	try{
-		clientTextChannel.send("<i>"+document.getElementById("name").value +" joined</i>");
+		clientTextChannel.send("<i>A user joined</i>");//"<i>"+document.getElementById("name").value +" joined</i>");
 	}
 	catch(e){
 		trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
@@ -377,10 +399,10 @@ function joinedToClient(){
 ***/
 window.onbeforeunload = function(){
 	if(typeof(clientTextChannel) != 'undefined'){
-		clientTextChannel.send("<i>"+document.getElementById("name").value+" left </i>");
+		clientTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait for next system message. </i>");
 	}
 	if(typeof(ownerTextChannel) != 'undefined'){
-		ownerTextChannel.send("<i>"+document.getElementById("name").value+" left </i>");
+		ownerTextChannel.send("<i>"+document.getElementById("name").value+" left. Please wait for next system message. </i>");
 	}
 }
 
