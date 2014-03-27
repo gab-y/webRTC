@@ -37,6 +37,8 @@ var clientPeerConnection;
 
 var appID = 0;//this app ID. Thanks to it this app ignore its own icecandidates carried by server (see socket.onicecandidate)
 
+var localStream;
+
 /*** connection roles ***/
 			//  Client used - Owner used
 /*var NONE = 0;//      No           No
@@ -45,6 +47,8 @@ var BOTH = 2;//      Yes          Yes
 var OWNER = 3;//     No           Yes       Only in disconnection case
 */
 var clientUsed = false; var ownerUsed = false;
+
+var iceCandidates = new Array(); var readingIce = false;
 
 //var connectionRole = NONE;//initialized with no connections
 //The js file is the same whether you are initiator or not but the instructions are not.
@@ -73,6 +77,10 @@ var pc_config = webrtcDetectedBrowser === 'firefox' ?
   
 var pc_constraints = null;//constraints about media
 
+// Set up audio and video regardless of what devices are present.
+var constraints = {'mandatory': {
+  'OfferToReceiveAudio':true,
+  'OfferToReceiveVideo':true }};
   
 var socket = io.connect();//connect to server's websocket. Answers if you are first or not :
 
@@ -125,6 +133,13 @@ socket.on('start',function(){
 		}
 		ownerTextChannel.onmessage = ownerMessage;//message receiving listener
 		
+		getUserMedia({audio:true, video:true}, 
+			function(stream){
+				document.getElementById("localVideo").src = URL.createObjectURL(stream);
+				ownerPeerConnection.addStream(stream);
+				localStream = stream;
+				ownerPeerConnection.onaddstream = gotStream;
+		
 		//creates an offer and a session description and send them
 		//JS : finally, what are createOffer parameters ?
 		ownerPeerConnection.createOffer(
@@ -139,7 +154,7 @@ socket.on('start',function(){
 				console.log("cannot create offer");
 				alert("cannot create offer");
 			},
-			null);//options - optional
+			constraints);//options - optional
 		ownerPeerConnection.onicecandidate = sendIceCandidate;//create its own ice candidate an send it to node server
 		//note the ON-icecandidate : several ice candidates are returned
 		
@@ -155,6 +170,12 @@ socket.on('start',function(){
 				ownerTextChannel = null;
 			}
 		},10000);
+			},
+			function(error) {
+			  trace("getUserMedia error: ", error);
+			}
+		);
+		
 	}
 });
 
@@ -181,21 +202,36 @@ socket.on('iceCandidate',function(rsdp, rmid, rcand, senderID){
 		}
 		else{ 
 			if(!clientUsed){//if following a connexion, add candidate to remote connection
-				try{
-				clientPeerConnection.addIceCandidate(new RTCIceCandidate({
+				iceCandidates.push({
 					sdpMLineIndex: rsdp,
 					sdpMid: rmid,
 					candidate: rcand
-					}));
-				}catch(e){
-					alert('adding ice candidate failed');
-					console.log("adding ice candidate failed");
-					trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+				});
+				if(readingIce){
+					readIce();
 				}
 			}
 		}
 	}
 });
+
+function readIce(){
+	var cand;
+	while(cand = iceCandidates.pop()){
+		try{
+			clientPeerConnection.addIceCandidate(new RTCIceCandidate({
+				sdpMLineIndex: cand.sdpMLineIndex,
+				sdpMid: cand.sdpMid,
+				candidate: cand.candidate
+			}));
+		}catch(e){
+			alert('adding ice candidate failed');
+			console.log("adding ice candidate failed");
+			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
+		}
+	}
+	readingIce = true;
+}
 
 
 /***
@@ -229,10 +265,17 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 			alert('RTCPeerConnection failed');
 			trace(e.message);//trace equals to console.log. Comes from Google's adapter.js
 		}
+		getUserMedia({audio:true, video:true}, 
+			function(stream){
+				document.getElementById("localVideo").src = URL.createObjectURL(stream);
+				clientPeerConnection.addStream(stream);
+				localStream = stream;
+				clientPeerConnection.onaddstream = gotStream;
+				
 		//set remote description from the one received
 		clientPeerConnection.setRemoteDescription( new RTCSessionDescription (offererSessionDescription));
 		trace('Offer received :\n' + offererSessionDescription.sdp);//trace equals to log
-		
+		readIce(); 
 		//create session description from our browser
 		clientPeerConnection.createAnswer(
 			//success callback
@@ -246,7 +289,7 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 				console.log("cannot create offer");
 				alert("cannot create offer");
 			},
-			null);//options
+			constraints);//options
 		
 		console.log('answer sent');
 		clientPeerConnection.ondatachannel = gotReceiveChannel;//create a listener for receiving data channels
@@ -281,6 +324,12 @@ socket.on('offerSessionDescription', function(offererSessionDescription){
 				clientPeerConnection.close();
 			}
 		},10000);
+			},
+			function(error) {
+			  trace("getUserMedia error: ", error);
+			}
+		);
+		
 	}
 });
 
@@ -410,3 +459,7 @@ window.onbeforeunload = function(){
 	}
 }
 
+function gotStream(event){
+  document.getElementById("remoteVideo").src = URL.createObjectURL(event.stream);
+  trace("Received remote stream");
+}
